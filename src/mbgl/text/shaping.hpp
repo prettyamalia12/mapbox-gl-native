@@ -64,7 +64,6 @@ const Shaping getShaping(const TaggedString& string,
                          style::TextJustifyType textJustify,
                          float spacing,
                          const Point<float>& translate,
-                         //float verticalHeight,
                          const WritingModeType,
                          BiDi& bidi,
                          const GlyphMap& glyphs);

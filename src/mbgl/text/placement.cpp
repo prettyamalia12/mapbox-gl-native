@@ -226,7 +226,8 @@ void Placement::placeLayerBucket(
                         auto prevOffset = prevPlacement->variableOffsets.find(symbolInstance.crossTileID);
                         if (prevOffset != prevPlacement->variableOffsets.end() &&
                             variableTextAnchors.front() != prevOffset->second.anchor) {
-                            std::vector<style::TextVariableAnchorType> filtered(variableTextAnchors.size());
+                            std::vector<style::TextVariableAnchorType> filtered;
+                            filtered.reserve(variableTextAnchors.size());
                             filtered.push_back(prevOffset->second.anchor);
                             for (auto anchor : variableTextAnchors) {
                                 if (anchor != prevOffset->second.anchor) {
@@ -307,7 +308,7 @@ void Placement::placeLayerBucket(
                         posMatrix, iconLabelPlaneMatrix, textPixelRatio,
                         placedSymbol, scale, fontSize,
                         bucket.layout.get<style::IconAllowOverlap>(),
-                        bucket.layout.get<style::IconPitchAlignment>() == style::AlignmentType::Map,
+                        pitchWithMap,
                         showCollisionBoxes, avoidEdges, collisionGroup.second);
                 placeIcon = placed.first;
                 offscreen &= placed.second;
@@ -429,6 +430,9 @@ void Placement::updateBucketOpacities(SymbolBucket& bucket, std::set<uint32_t>& 
 
     const bool textAllowOverlap = bucket.layout.get<style::TextAllowOverlap>();
     const bool iconAllowOverlap = bucket.layout.get<style::IconAllowOverlap>();
+    const bool variablePlacement = !bucket.layout.get<style::TextVariableAnchor>().empty();
+    const bool rotateWithMap = bucket.layout.get<style::TextRotationAlignment>() == style::AlignmentType::Map;
+    const bool pitchWithMap = bucket.layout.get<style::TextPitchAlignment>() == style::AlignmentType::Map;
     
     // If allow-overlap is true, we can show symbols before placement runs on them
     // But we have to wait for placement if we potentially depend on a paired icon/text
@@ -508,7 +512,42 @@ void Placement::updateBucketOpacities(SymbolBucket& bucket, std::set<uint32_t>& 
             if (feature.alongLine) {
                 return;
             }
-            auto dynamicVertex = CollisionBoxProgram::dynamicVertex(placed, false);
+            auto dynamicVertex = CollisionBoxProgram::dynamicVertex(placed, false, {});
+            for (size_t i = 0; i < feature.boxes.size() * 4; i++) {
+                bucket.collisionBox.dynamicVertices.emplace_back(dynamicVertex);
+            }
+        };
+
+        auto updateCollisionTextBox = [&](const auto& feature, const bool placed) {
+            if (feature.alongLine) {
+                return;
+            }
+            Point<float> shift;
+            bool used = true;
+            if (variablePlacement) {
+                auto foundOffset = variableOffsets.find(symbolInstance.crossTileID);
+                if (foundOffset != variableOffsets.end()) {
+                    const VariableOffset& variableOffset = foundOffset->second;
+                    // This will show either the currently placed position or the last
+                    // successfully placed position (so you can visualize what collision
+                    // just made the symbol disappear, and the most likely place for the
+                    // symbol to come back)
+                    shift = calculateVariableLayoutOffset(static_cast<style::SymbolAnchorType>(variableOffset.anchor),
+                                                          variableOffset.width,
+                                                          variableOffset.height,
+                                                          variableOffset.radialOffset,
+                                                          variableOffset.textBoxScale);
+                    if (rotateWithMap) {
+                        shift = util::rotate(shift, pitchWithMap ? state.getBearing() : -state.getBearing());
+                    }
+                } else {
+                    // No offset -> this symbol hasn't been placed since coming on-screen
+                    // No single box is particularly meaningful and all of them would be too noisy
+                    // Use the center box just to show something's there, but mark it "not used"
+                    used = false;
+                }
+            }
+            auto dynamicVertex = CollisionBoxProgram::dynamicVertex(placed, !used, shift);
             for (size_t i = 0; i < feature.boxes.size() * 4; i++) {
                 bucket.collisionBox.dynamicVertices.emplace_back(dynamicVertex);
             }
@@ -519,7 +558,7 @@ void Placement::updateBucketOpacities(SymbolBucket& bucket, std::set<uint32_t>& 
                 return;
             }
             for (const CollisionBox& box : feature.boxes) {
-                auto dynamicVertex = CollisionBoxProgram::dynamicVertex(placed, !box.used);
+                auto dynamicVertex = CollisionBoxProgram::dynamicVertex(placed, !box.used, {});
                 bucket.collisionCircle.dynamicVertices.emplace_back(dynamicVertex);
                 bucket.collisionCircle.dynamicVertices.emplace_back(dynamicVertex);
                 bucket.collisionCircle.dynamicVertices.emplace_back(dynamicVertex);
@@ -528,7 +567,7 @@ void Placement::updateBucketOpacities(SymbolBucket& bucket, std::set<uint32_t>& 
         };
         
         if (bucket.hasCollisionBoxData()) {
-            updateCollisionBox(symbolInstance.textCollisionFeature, opacityState.text.placed);
+            updateCollisionTextBox(symbolInstance.textCollisionFeature, opacityState.text.placed);
             updateCollisionBox(symbolInstance.iconCollisionFeature, opacityState.icon.placed);
         }
         if (bucket.hasCollisionCircleData()) {

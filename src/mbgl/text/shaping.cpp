@@ -258,7 +258,6 @@ void shapeLines(Shaping& shaping,
                 const float lineHeight,
                 const style::SymbolAnchorType textAnchor,
                 const style::TextJustifyType textJustify,
-               // const float verticalHeight,
                 const WritingModeType writingMode,
                 const GlyphMap& glyphMap) {
     
@@ -302,7 +301,7 @@ void shapeLines(Shaping& shaping,
             // We don't know the baseline, but since we're laying out
             // at 24 points, we can calculate how much it will move when
             // we scale up or down.
-            const double baselineOffset = (lineMaxScale - section.scale) * 24;
+            const double baselineOffset = (lineMaxScale - section.scale) * util::ONE_EM;
             
             const Glyph& glyph = **it->second;
             
