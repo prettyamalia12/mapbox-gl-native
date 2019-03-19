@@ -1,6 +1,8 @@
 #include <mbgl/layermanager/layer_manager.hpp>
 #include <mbgl/map/map_impl.hpp>
 #include <mbgl/renderer/update_parameters.hpp>
+#include <mbgl/storage/file_source.hpp>
+#include <mbgl/storage/resource_transform.hpp>
 #include <mbgl/style/style_impl.hpp>
 #include <mbgl/util/exception.hpp>
 
@@ -8,24 +10,32 @@ namespace mbgl {
 
 Map::Impl::Impl(RendererFrontend& frontend_,
                 MapObserver& observer_,
-                FileSource& fileSource_,
                 Scheduler& scheduler_,
                 Size size_,
                 float pixelRatio_,
-                const MapOptions& mapOptions)
+                std::shared_ptr<FileSource> fileSource_,
+                const MapOptions& mapOptions,
+                const ResourceOptions& resourceOptions)
         : observer(observer_),
           rendererFrontend(frontend_),
-          fileSource(fileSource_),
           scheduler(scheduler_),
           transform(observer, mapOptions.constrainMode(), mapOptions.viewportMode()),
           mode(mapOptions.mapMode()),
           pixelRatio(pixelRatio_),
           crossSourceCollisions(mapOptions.crossSourceCollisions()),
-          style(std::make_unique<style::Style>(scheduler, fileSource, pixelRatio)),
+          fileSource(std::move(fileSource_)),
+          style(std::make_unique<style::Style>(scheduler, *fileSource, pixelRatio)),
           annotationManager(*style) {
     style->impl->setObserver(this);
     rendererFrontend.setObserver(*this);
     transform.resize(size_);
+    if (resourceOptions.resourceTransform()) {
+        resourceTransform = std::make_unique<Actor<ResourceTransform>>(scheduler,
+            [callback = resourceOptions.resourceTransform()] (Resource::Kind, const std::string &&url_) {
+                return callback(std::move(url_));
+            });
+       fileSource->setResourceTransform(resourceTransform->self());
+    }
 }
 
 Map::Impl::~Impl() {
@@ -65,7 +75,7 @@ void Map::Impl::onUpdate() {
         style->impl->getSourceImpls(),
         style->impl->getLayerImpls(),
         annotationManager,
-        fileSource,
+        *fileSource,
         prefetchZoomDelta,
         bool(stillImageRequest),
         crossSourceCollisions
