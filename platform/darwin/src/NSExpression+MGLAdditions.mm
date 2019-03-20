@@ -1016,12 +1016,8 @@ NSArray *MGLSubexpressionsWithJSONObjects(NSArray *objects) {
             if ([constantValue isKindOfClass:[MGLAttributedExpression class]]) {
                 MGLAttributedExpression *attributedExpression = (MGLAttributedExpression *)constantValue;
                 id jsonObject = attributedExpression.expression.mgl_jsonExpressionObject;
-                NSMutableArray *attributes = [NSMutableArray array];
-                if ([jsonObject isKindOfClass:[NSArray class]]) {
-                    [attributes addObjectsFromArray:jsonObject];
-                } else {
-                    [attributes addObject:jsonObject];
-                }
+                NSMutableArray *attributes = [NSMutableArray arrayWithObjects:jsonObject, nil];
+                
                 if (attributedExpression.attributes) {
                     NSMutableDictionary *attributedDictionary = [NSMutableDictionary dictionaryWithDictionary:attributedExpression.attributes];
                     if (attributedDictionary[MGLFontNamesAttribute]) {

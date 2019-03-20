@@ -1087,6 +1087,18 @@ using namespace std::string_literals;
         XCTAssertEqualObjects([NSExpression expressionWithMGLJSONObject:jsonExpression], expression);
     }
     {
+        MGLAttributedExpression *attribute1 = [[MGLAttributedExpression alloc] initWithExpression:[NSExpression expressionWithFormat:@"CAST(x, 'NSString')"]
+                                                                                       attributes:@{ MGLFontSizeAttribute: @(1.2),
+                                                                                                     MGLFontColorAttribute: [MGLColor redColor],
+                                                                                                     MGLFontNamesAttribute: @[ @"DIN Offc Pro Bold", @"Arial Unicode MS Bold" ]
+                                                                                                     }] ;
+        NSExpression *expression = [NSExpression expressionWithFormat:@"mgl_attributed:(%@)", MGLConstantExpression(attribute1)];
+        
+        NSArray *jsonExpression = @[ @"format", @[@"to-string", @[@"get", @"x"]], @{ @"font-scale": @1.2, @"text-color": @[@"rgb", @255, @0, @0] , @"text-font" : @[ @"literal", @[ @"DIN Offc Pro Bold", @"Arial Unicode MS Bold" ]]} ];
+        XCTAssertEqualObjects(expression.mgl_jsonExpressionObject, jsonExpression);
+        XCTAssertEqualObjects([NSExpression expressionWithMGLJSONObject:jsonExpression], expression);
+    }
+    {
         MGLAttributedExpression *attribute1 = [MGLAttributedExpression attributedExpression:[NSExpression expressionForConstantValue:@"foo"]
                                                                                   fontNames:nil
                                                                                    fontSize:@(1.2)];
@@ -1267,6 +1279,17 @@ using namespace std::string_literals;
 
 - (void)testConvenienceInitializers {
     {
+        NSExpression *hasPriceImageExpression = [NSExpression mgl_expressionForConditional:[NSPredicate predicateWithFormat:@"$featureIdentifier = 9800"]
+                                                                            trueExpression:[NSExpression expressionForConstantValue:@"1234"]
+                                                                          falseExpresssion:[NSExpression expressionForConstantValue:@"4567"]];
+        NSExpression *imageExpression = [NSExpression mgl_expressionForConditional:[NSPredicate predicateWithFormat:@"$featureIdentifier = 9800"]
+                                                                    trueExpression:[NSExpression expressionForConstantValue:@"8900"]
+                                                                  falseExpresssion:[NSExpression expressionForConstantValue:@"1122"]];
+        NSExpression *pinExpression = [NSExpression mgl_expressionForConditional:[NSPredicate predicateWithFormat:@"price = nil"]
+                                                                  trueExpression:imageExpression
+                                                                falseExpresssion:hasPriceImageExpression];
+        
+        NSArray *jsonExp = pinExpression.mgl_jsonExpressionObject;
         NSExpression *expression = [NSExpression mgl_expressionForConditional:[NSPredicate predicateWithFormat:@"1 = 2"]
                                                                trueExpression:MGLConstantExpression(@YES)
                                                              falseExpresssion:MGLConstantExpression(@NO)];
